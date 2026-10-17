@@ -377,7 +377,7 @@ function makeFork(def,id){
   const bk=i=>Math.max(-0.32,Math.min(0.32,C[i]*28));
   const fm=computeFrames(pts,false,dsB,T[i1],T[i2],bk(i1),bk(i2));
   const side=Math.sign(B.clone().sub(A).dot(R[i1]))||1;
-  const w=Math.round(W*0.55);
+  const w=Math.round(W*0.75);
   const f={id,u1:def.u1,u2:def.u2,i1,i2,n:n+1,LB,ds:dsB,w,side,P:pts,T:fm.T,R:fm.R,U:fm.U,C:fm.C,Lm:(def.u2-def.u1)*Lng,
     pad:{sb:LB*0.5,d:0},skipB:new Uint8Array(n+1),skipM:new Uint8Array(N)};
   const thr=W/2+w/2+2, thr2=thr*thr;
@@ -404,8 +404,8 @@ function makeFork(def,id){
 }
 function buildForkMeshes(f){
   const w=f.w, AMB=0xffa030;
-  const roadM=new THREE.MeshBasicMaterial({map:roadTex({base:'#1a1208',alt:'#271a0c',edge:'#c86a10',dash:'#ffc070'}),side:DS,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
-  stripG(f.P,f.R,f.U,false,f.ds,-w/2,w/2,0.02,0.02,roadM);
+  const roadM=new THREE.MeshBasicMaterial({map:roadTex({base:'#1a1208',alt:'#271a0c',edge:'#c86a10',dash:'#ffc070'}),side:DS,polygonOffset:true,polygonOffsetFactor:2,polygonOffsetUnits:2});
+  stripG(f.P,f.R,f.U,false,f.ds,-w/2,w/2,-0.03,-0.03,roadM);
   const eM=new THREE.MeshBasicMaterial({color:AMB,side:DS,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3});
   stripG(f.P,f.R,f.U,false,f.ds,-w/2-1.2,-w/2,0.07,0.07,eM,f.skipB);
   stripG(f.P,f.R,f.U,false,f.ds,w/2,w/2+1.2,0.07,0.07,eM,f.skipB);
