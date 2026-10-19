@@ -723,8 +723,7 @@ function padDbg(gp){
   gp.axes.forEach((v,i)=>{const d=v-padSeen.base[i]; if(Math.abs(d)>0.15&&Math.abs(d)>Math.abs(padSeen.a[i]||0))padSeen.a[i]=d;});
   const now=gp.axes.map((v,i)=>i+':'+v.toFixed(1)).join(' ');
   const seenA=Object.keys(padSeen.a).map(i=>i+'('+padSeen.a[i].toFixed(1)+')').join(' ');
-  const t='mandos: '+padCount+' · activo #'+gp.index+'
-ahora botones ['+bs.join(',')+'] · '+gp.buttons.length+' bt, '+gp.axes.length+' ejes: '+now+'\nVISTO botones ['+Object.keys(padSeen.b).join(',')+'] ejes movidos ['+seenA+']';
+  const t='mandos: '+padCount+' · activo #'+gp.index+'\nahora botones ['+bs.join(',')+'] · '+gp.buttons.length+' bt, '+gp.axes.length+' ejes: '+now+'\nVISTO botones ['+Object.keys(padSeen.b).join(',')+'] ejes movidos ['+seenA+']';
   if(t!==padDbgT){padDbgT=t;$('padDbg').textContent=t;}
 }
 function gp0(){return pickPad().gp||{axes:[],buttons:[]};}
