@@ -156,6 +156,7 @@ button:focus-visible{outline:2px solid var(--yel);outline-offset:2px;}
           <button class="alt" id="tPad">Asignar mando</button>
           <button class="alt" id="tExit">Salir del juego</button>
         </div>
+        <p class="sub" id="padDbg" style="margin:4px 0 0;font-size:11px;word-break:break-all"></p>
         <p class="sub" id="padInfo" style="margin:8px 0 0;font-size:12px"></p>
       </div>
     </div>
@@ -698,27 +699,37 @@ const LEARN=[['steer','mueve el stick a la IZQUIERDA'],['gas','pulsa ACELERAR'],
 const padOn=(gp,e)=>typeof e==='number'?!!(gp.buttons[e]&&gp.buttons[e].pressed):(((gp.axes[e.a]||0)-e.base)*e.dir)>0.5;
 function bigAxis(gp,base){let bi=-1,bv=0;gp.axes.forEach((v,i)=>{const d=v-base[i];if(Math.abs(d)>Math.abs(bv)){bv=d;bi=i;}});return [bi,bv];}
 function learnPoll(gp){
-  const L=learn, key=LEARN[L.i][0];
-  if(!L.rel){ if(!gp.buttons.some(x=>x.pressed)){L.rel=true;L.base=gp.axes.slice();} return; }
+  const L=learn, key=LEARN[L.i][0], now=performance.now();
+  if(now<L.t){L.base=gp.axes.slice();L.bb=gp.buttons.map(x=>x.pressed);return;}
+  gp.buttons.forEach((x,i)=>{if(!x.pressed)L.bb[i]=false;});
   let hit=false;
   if(key==='steer'){
     const [bi,bv]=bigAxis(gp,L.base);
     if(Math.abs(bv)>0.6){L.out.axis=bi;L.out.inv=bv>0;hit=true;}
   }else{
-    const b=gp.buttons.findIndex(x=>x.pressed);
+    const b=gp.buttons.findIndex((x,i)=>x.pressed&&!L.bb[i]);
     if(b>=0){L.out[key]=[b];hit=true;}
     else{const [bi,bv]=bigAxis(gp,L.base); if(Math.abs(bv)>0.6){L.out[key]=[{a:bi,base:L.base[bi],dir:Math.sign(bv)}];hit=true;}}
   }
   if(!hit)return;
-  L.i++; L.rel=false;
+  L.i++; L.t=now+800;
   if(L.i>=LEARN.length){padMap=L.out; try{localStorage.setItem('zr_padmap',JSON.stringify(padMap));}catch(e){} learn=null;}
   syncOpts();
 }
+let padDbgT='';
+function padDbg(gp){
+  const bs=[];gp.buttons.forEach((x,i)=>{if(x.pressed)bs.push(i);});
+  const as=gp.axes.map((v,i)=>i+':'+v.toFixed(1)).join(' ');
+  const t='botones: ['+bs.join(',')+'] · '+gp.buttons.length+' bt, '+gp.axes.length+' ejes · '+as;
+  if(t!==padDbgT){padDbgT=t;$('padDbg').textContent=t;}
+}
+function gp0(){try{for(const g of (navigator.getGamepads?navigator.getGamepads():[])){if(g&&g.connected)return g;}}catch(e){}return {axes:[],buttons:[]};}
 function pollPad(){
   let gp=null;
   try{for(const g of (navigator.getGamepads?navigator.getGamepads():[])){if(g&&g.connected){gp=g;break;}}}catch(e){}
   if(!gp){ if(padId){padId='';learn=null;syncOpts();} gpad.g=gpad.b=0; gpad.steer=0; gpad.prev={}; return; }
   if(gp.id!==padId){padId=gp.id;padMode=gp.mapping||'sin mapeo';syncOpts();}
+  padDbg(gp);
   if(learn){ learnPoll(gp); gpad.g=gpad.b=0; gpad.steer=0; return; }
   const m=padMap, on=a=>a.some(e=>padOn(gp,e));
   const ax=(gp.axes[m.axis]||0)*(m.inv?-1:1); let st=Math.abs(ax)<0.15?0:(ax-Math.sign(ax)*0.15)/0.85;
@@ -803,7 +814,7 @@ $('tInv').onclick=()=>{tiltInv=!tiltInv;};
 $('tShip').onclick=()=>{useModel=!useModel;syncOpts();};
 $('tMus').onclick=()=>{musicOn=!musicOn;syncOpts();};
 $('tFull').onclick=()=>goFull();
-$('tPad').onclick=()=>{if(learn){learn=null;}else if(padId){learn={i:0,out:{axis:0,inv:false},rel:false,base:null};}syncOpts();};
+$('tPad').onclick=()=>{if(learn){learn=null;}else if(padId){learn={i:0,out:{axis:0,inv:false},t:performance.now()+800,base:gp0().axes.slice(),bb:[]};}syncOpts();};
 $('tRst').onclick=()=>{padMap=PAD_STD;learn=null;try{localStorage.removeItem('zr_padmap');}catch(e){}syncOpts();};
 $('tTrack').onclick=()=>{buildTrack((trackIdx+1)%TRACKS.length);reset();snapCam=true;syncOpts();};
 syncOpts();
