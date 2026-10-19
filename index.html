@@ -152,6 +152,8 @@ button:focus-visible{outline:2px solid var(--yel);outline-offset:2px;}
           <button class="alt" id="tFull">Pantalla completa</button>
           <button class="alt" id="tSnd">Sonido: SÍ</button>
           <button class="alt" id="tMus">Música: SÍ</button>
+          <button class="alt" id="tRst">Mando: estándar</button>
+          <button class="alt" id="tPad">Asignar mando</button>
           <button class="alt" id="tExit">Salir del juego</button>
         </div>
         <p class="sub" id="padInfo" style="margin:8px 0 0;font-size:12px"></p>
@@ -686,22 +688,44 @@ function playStep(step,t){
 
 /* ---------- entrada ---------- */
 const keys={l:0,r:0,g:0,b:0}, tk={l:0,r:0,g:0,b:0};
-/* ---------- mando (Gamepad API, mapeo estándar) ---------- */
-// Índices del mapeo estándar: 0 A, 1 B, 3 Y, 6 LT, 7 RT, 9 Start, 12-15 cruceta. Para añadir funciones: nueva acción aquí y en pollPad.
-const PAD_MAP={gas:[7,0,12],brake:[6,1,13],cam:[3],pause:[9],ok:[0]};
-const gpad={g:0,b:0,steer:0,prev:{}}; let padId='';
+/* ---------- mando (Gamepad API) ---------- */
+// Mapeo estándar: 0 A, 1 B, 3 Y, 6 LT, 7 RT, 9 Start, 12-15 cruceta. Para mandos sin mapeo estándar hay un asistente ("Asignar mando").
+// Cada entrada es un botón (número) o un eje {a,base,dir}. Para añadir funciones: nueva acción aquí, en LEARN y en pollPad.
+const PAD_STD={axis:0,inv:false,gas:[7,0,12],brake:[6,1,13],cam:[3],pause:[9],ok:[0]};
+let padMap=PAD_STD; try{const m=JSON.parse(localStorage.getItem('zr_padmap')||'null'); if(m&&m.gas)padMap=m;}catch(e){}
+const gpad={g:0,b:0,steer:0,prev:{}}; let padId='',padMode='',learn=null;
+const LEARN=[['steer','mueve el stick a la IZQUIERDA'],['gas','pulsa ACELERAR'],['brake','pulsa FRENAR'],['cam','pulsa CÁMARA'],['pause','pulsa PAUSA'],['ok','pulsa ACEPTAR (empezar)']];
+const padOn=(gp,e)=>typeof e==='number'?!!(gp.buttons[e]&&gp.buttons[e].pressed):(((gp.axes[e.a]||0)-e.base)*e.dir)>0.5;
+function bigAxis(gp,base){let bi=-1,bv=0;gp.axes.forEach((v,i)=>{const d=v-base[i];if(Math.abs(d)>Math.abs(bv)){bv=d;bi=i;}});return [bi,bv];}
+function learnPoll(gp){
+  const L=learn, key=LEARN[L.i][0];
+  if(!L.rel){ if(!gp.buttons.some(x=>x.pressed)){L.rel=true;L.base=gp.axes.slice();} return; }
+  let hit=false;
+  if(key==='steer'){
+    const [bi,bv]=bigAxis(gp,L.base);
+    if(Math.abs(bv)>0.6){L.out.axis=bi;L.out.inv=bv>0;hit=true;}
+  }else{
+    const b=gp.buttons.findIndex(x=>x.pressed);
+    if(b>=0){L.out[key]=[b];hit=true;}
+    else{const [bi,bv]=bigAxis(gp,L.base); if(Math.abs(bv)>0.6){L.out[key]=[{a:bi,base:L.base[bi],dir:Math.sign(bv)}];hit=true;}}
+  }
+  if(!hit)return;
+  L.i++; L.rel=false;
+  if(L.i>=LEARN.length){padMap=L.out; try{localStorage.setItem('zr_padmap',JSON.stringify(padMap));}catch(e){} learn=null;}
+  syncOpts();
+}
 function pollPad(){
   let gp=null;
   try{for(const g of (navigator.getGamepads?navigator.getGamepads():[])){if(g&&g.connected){gp=g;break;}}}catch(e){}
-  if(!gp){ if(padId){padId='';syncOpts();} gpad.g=gpad.b=0; gpad.steer=0; gpad.prev={}; return; }
-  if(gp.id!==padId){padId=gp.id;syncOpts();}
-  const bt=i=>!!(gp.buttons[i]&&gp.buttons[i].pressed);
-  const any=a=>a.some(bt);
-  const ax=gp.axes[0]||0; let st=Math.abs(ax)<0.15?0:(ax-Math.sign(ax)*0.15)/0.85;
-  if(bt(14))st=-1; else if(bt(15))st=1;
-  gpad.steer=st; gpad.g=any(PAD_MAP.gas)?1:0; gpad.b=any(PAD_MAP.brake)?1:0;
-  const edge=a=>{const k=a.join(),n=any(a),r=n&&!gpad.prev[k];gpad.prev[k]=n;return r;};
-  const eCam=edge(PAD_MAP.cam), ePause=edge(PAD_MAP.pause), eOk=edge(PAD_MAP.ok);
+  if(!gp){ if(padId){padId='';learn=null;syncOpts();} gpad.g=gpad.b=0; gpad.steer=0; gpad.prev={}; return; }
+  if(gp.id!==padId){padId=gp.id;padMode=gp.mapping||'sin mapeo';syncOpts();}
+  if(learn){ learnPoll(gp); gpad.g=gpad.b=0; gpad.steer=0; return; }
+  const m=padMap, on=a=>a.some(e=>padOn(gp,e));
+  const ax=(gp.axes[m.axis]||0)*(m.inv?-1:1); let st=Math.abs(ax)<0.15?0:(ax-Math.sign(ax)*0.15)/0.85;
+  if(m===PAD_STD){ if(padOn(gp,14))st=-1; else if(padOn(gp,15))st=1; }
+  gpad.steer=st; gpad.g=on(m.gas)?1:0; gpad.b=on(m.brake)?1:0;
+  const edge=a=>{const k=a.map(e=>typeof e==='number'?e:'a'+e.a).join(),n=on(a),r=n&&!gpad.prev[k];gpad.prev[k]=n;return r;};
+  const eCam=edge(m.cam), ePause=edge(m.pause), eOk=edge(m.ok);
   if(state==='menu'){ if(eOk&&$('bye').classList.contains('hidden'))start(); }
   else if(state==='finished'&&!$('end').classList.contains('hidden')){ if(eOk)start(); }
   else if(paused){ if(ePause||eOk)setPause(false); }
@@ -769,7 +793,8 @@ function syncOpts(){
   $('tShip').textContent='Nave: '+(useModel?'modelo propio':'clásica');
   $('tMus').textContent='Música: '+(musicOn?'SÍ':'NO');
   $('tTrack').textContent='Circuito: '+TRACKS[trackIdx].name;
-  $('padInfo').textContent=padId?'Mando: '+padId.slice(0,48):'Mando: pulsa un botón para detectarlo';
+  $('padInfo').textContent=learn?'Asignar mando ('+(learn.i+1)+'/'+LEARN.length+'): '+LEARN[learn.i][1]:(padId?'Mando: '+padId.slice(0,40)+' ['+padMode+']'+(padMap===PAD_STD?'':' · asignado'):'Mando: pulsa un botón para detectarlo');
+  $('tPad').textContent=learn?'Cancelar asignación':'Asignar mando';
 }
 $('tAuto').onclick=()=>{autoGas=!autoGas;syncOpts();};
 $('tSnd').onclick=()=>{sndOn=!sndOn;syncOpts();};
@@ -778,6 +803,8 @@ $('tInv').onclick=()=>{tiltInv=!tiltInv;};
 $('tShip').onclick=()=>{useModel=!useModel;syncOpts();};
 $('tMus').onclick=()=>{musicOn=!musicOn;syncOpts();};
 $('tFull').onclick=()=>goFull();
+$('tPad').onclick=()=>{if(learn){learn=null;}else if(padId){learn={i:0,out:{axis:0,inv:false},rel:false,base:null};}syncOpts();};
+$('tRst').onclick=()=>{padMap=PAD_STD;learn=null;try{localStorage.removeItem('zr_padmap');}catch(e){}syncOpts();};
 $('tTrack').onclick=()=>{buildTrack((trackIdx+1)%TRACKS.length);reset();snapCam=true;syncOpts();};
 syncOpts();
 
