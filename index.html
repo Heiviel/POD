@@ -156,7 +156,7 @@ button:focus-visible{outline:2px solid var(--yel);outline-offset:2px;}
           <button class="alt" id="tPad">Asignar mando</button>
           <button class="alt" id="tExit">Salir del juego</button>
         </div>
-        <p class="sub" id="padDbg" style="margin:4px 0 0;font-size:11px;word-break:break-all"></p>
+        <p class="sub" id="padDbg" style="margin:4px 0 0;font-size:11px;word-break:break-all;white-space:pre-line"></p>
         <p class="sub" id="padInfo" style="margin:8px 0 0;font-size:12px"></p>
       </div>
     </div>
@@ -716,11 +716,14 @@ function learnPoll(gp){
   if(L.i>=LEARN.length){padMap=L.out; try{localStorage.setItem('zr_padmap',JSON.stringify(padMap));}catch(e){} learn=null;}
   syncOpts();
 }
-let padDbgT='';
+let padDbgT='', padSeen={b:{},a:{},base:null,id:''};
 function padDbg(gp){
-  const bs=[];gp.buttons.forEach((x,i)=>{if(x.pressed)bs.push(i);});
-  const as=gp.axes.map((v,i)=>i+':'+v.toFixed(1)).join(' ');
-  const t='botones: ['+bs.join(',')+'] · '+gp.buttons.length+' bt, '+gp.axes.length+' ejes · '+as;
+  if(padSeen.id!==gp.id){padSeen={b:{},a:{},base:gp.axes.slice(),id:gp.id};}
+  const bs=[];gp.buttons.forEach((x,i)=>{if(x.pressed){bs.push(i);padSeen.b[i]=1;}});
+  gp.axes.forEach((v,i)=>{const d=v-padSeen.base[i]; if(Math.abs(d)>0.15&&Math.abs(d)>Math.abs(padSeen.a[i]||0))padSeen.a[i]=d;});
+  const now=gp.axes.map((v,i)=>i+':'+v.toFixed(1)).join(' ');
+  const seenA=Object.keys(padSeen.a).map(i=>i+'('+padSeen.a[i].toFixed(1)+')').join(' ');
+  const t='ahora botones ['+bs.join(',')+'] · '+gp.buttons.length+' bt, '+gp.axes.length+' ejes: '+now+'\nVISTO botones ['+Object.keys(padSeen.b).join(',')+'] ejes movidos ['+seenA+']';
   if(t!==padDbgT){padDbgT=t;$('padDbg').textContent=t;}
 }
 function gp0(){try{for(const g of (navigator.getGamepads?navigator.getGamepads():[])){if(g&&g.connected)return g;}}catch(e){}return {axes:[],buttons:[]};}
